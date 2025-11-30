@@ -3,7 +3,7 @@ import re
 import logging
 from fastapi import APIRouter, HTTPException
 from typing import List
-from models import ProjectConfig, ProjectState
+from models import ProjectConfig, ProjectState, ProjectSettings, RequirementLevel
 from storage import GitStorage
 
 # Configure logging
@@ -93,4 +93,88 @@ def get_project(name: str):
     except Exception as e:
         logger.error(f"Error loading project {name}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to load project")
+
+@router.get("/{name}/settings", response_model=ProjectSettings)
+def get_project_settings(name: str):
+    """Get project settings."""
+    try:
+        project_path = os.path.join(PROJECTS_ROOT, name)
+        if not os.path.exists(project_path):
+            logger.warning(f"Project not found: {name}")
+            raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+        
+        logger.info(f"Loading settings for project: {name}")
+        storage = GitStorage(project_path)
+        state = storage.load_project()
+        return state.config.settings
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading settings for project {name}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to load project settings")
+
+@router.put("/{name}/settings", response_model=ProjectSettings)
+def update_project_settings(name: str, settings: ProjectSettings):
+    """Update project settings."""
+    try:
+        project_path = os.path.join(PROJECTS_ROOT, name)
+        if not os.path.exists(project_path):
+            logger.warning(f"Project not found: {name}")
+            raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+        
+        logger.info(f"Updating settings for project: {name}")
+        storage = GitStorage(project_path)
+        state = storage.load_project()
+        
+        # Update settings
+        state.config.settings = settings
+        
+        # Save and commit
+        storage.save_draft(state)
+        storage.commit(f"Updated project settings")
+        
+        logger.info(f"Successfully updated settings for project: {name}")
+        return settings
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating settings for project {name}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update project settings")
+
+@router.put("/{name}/levels", response_model=List[RequirementLevel])
+def update_requirement_levels(name: str, levels: List[RequirementLevel]):
+    """Update requirement levels for a project."""
+    try:
+        project_path = os.path.join(PROJECTS_ROOT, name)
+        if not os.path.exists(project_path):
+            logger.warning(f"Project not found: {name}")
+            raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+        
+        # Validate levels
+        if not levels:
+            raise HTTPException(status_code=400, detail="At least one requirement level is required")
+        
+        # Check for duplicate level names
+        level_names = [level.name for level in levels]
+        if len(level_names) != len(set(level_names)):
+            raise HTTPException(status_code=400, detail="Duplicate level names are not allowed")
+        
+        logger.info(f"Updating requirement levels for project: {name}")
+        storage = GitStorage(project_path)
+        state = storage.load_project()
+        
+        # Update levels
+        state.config.levels = levels
+        
+        # Save and commit
+        storage.save_draft(state)
+        storage.commit(f"Updated requirement levels")
+        
+        logger.info(f"Successfully updated {len(levels)} requirement levels for project: {name}")
+        return levels
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating levels for project {name}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update requirement levels")
 

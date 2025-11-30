@@ -146,6 +146,9 @@ graph LR
   - `GET /api/projects/` - List all projects
   - `POST /api/projects/` - Create new project
   - `GET /api/projects/{name}` - Get project state
+  - `PUT /api/projects/{name}/levels` - Update requirement levels
+  - `GET /api/projects/{name}/settings` - Get project settings
+  - `PUT /api/projects/{name}/settings` - Update project settings
 
 #### Artifacts API (`api/artifacts.py`)
 - **Responsibility**: Artifact and trace management
@@ -213,7 +216,8 @@ classDiagram
     
     class Requirement {
         +String level
-        +String parent_id
+        +List~String~ parent_ids
+        +String justification
     }
     
     class RiskHazard {
@@ -244,10 +248,21 @@ classDiagram
         +List~Trace~ traces
     }
     
+    class RequirementLevel {
+        +String name
+        +String description
+    }
+    
+    class ProjectSettings {
+        +Boolean enforce_single_parent
+        +Boolean prevent_orphans_at_lower_levels
+    }
+    
     class ProjectConfig {
         +String name
-        +List~String~ levels
+        +List~RequirementLevel~ levels
         +Dict risk_matrix
+        +ProjectSettings settings
     }
     
     BaseArtifact <|-- Requirement
@@ -257,6 +272,8 @@ classDiagram
     ProjectState --> ProjectConfig
     ProjectState --> BaseArtifact
     ProjectState --> Trace
+    ProjectConfig --> RequirementLevel
+    ProjectConfig --> ProjectSettings
 ```
 
 ### 4.2 Traceability Model
@@ -281,6 +298,70 @@ graph LR
 - **VERIFIES**: Verification activity verifies a requirement or design
 - **MITIGATES**: Control mitigates a risk hazard
 - **CAUSES**: Cause leads to a hazard
+
+### 4.3 Parent Tracing and Project Settings
+
+#### Parent Requirement Tracing
+
+The system supports flexible parent-child relationships for requirements:
+
+**Default Behavior** (Multiple Parents Allowed):
+- Requirements can trace to multiple parent requirements
+- Provides flexibility for complex projects where a requirement may satisfy multiple higher-level needs
+- Example: A "User Authentication" requirement might satisfy both "Security" and "User Management" parent requirements
+
+**Single Parent Enforcement** (Configurable):
+- Project setting: `enforce_single_parent`
+- When enabled, each requirement can only have one parent
+- Aligns with systems engineering best practices for clean hierarchical decomposition
+- Recommended for projects following strict V-model or waterfall methodologies
+
+**Orphan Prevention** (Configurable):
+- Project setting: `prevent_orphans_at_lower_levels`
+- When enabled, all non-top-level requirements must have at least one parent
+- Ensures complete traceability throughout the requirement hierarchy
+- Top-level requirements are always allowed to have no parent (they are the root of the hierarchy)
+
+```mermaid
+graph TD
+    TopReq1[Top Level Req 1<br/>No parent required]
+    TopReq2[Top Level Req 2<br/>No parent required]
+    
+    MidReq1[Mid Level Req 1<br/>Must have parent if orphan prevention enabled]
+    MidReq2[Mid Level Req 2<br/>Can have multiple parents by default]
+    
+    LowReq1[Low Level Req 1<br/>Must have parent if orphan prevention enabled]
+    
+    TopReq1 --> MidReq1
+    TopReq1 --> MidReq2
+    TopReq2 --> MidReq2
+    MidReq1 --> LowReq1
+    MidReq2 --> LowReq1
+    
+    style MidReq2 fill:#ffffcc
+    style LowReq1 fill:#ffffcc
+```
+
+#### Project Settings Architecture
+
+**Settings Storage**:
+- Stored in `project.xml` as part of `ProjectConfig`
+- Persisted in Git with all other project data
+- Validated on every artifact create/update operation
+
+**Settings UI**:
+- Dedicated settings page in project dashboard
+- Each setting includes:
+  - **Title**: Short, descriptive name
+  - **Description**: Detailed explanation of purpose and impact
+  - **Control**: Toggle, dropdown, or input field
+- Changes take effect immediately after save
+- Validation errors shown inline
+
+**Validation Logic**:
+- Enforced at API level in `api/artifacts.py`
+- Prevents invalid operations based on settings
+- Returns clear error messages for violations
 
 ### 4.4 Advanced Traceability Model
 
@@ -370,10 +451,23 @@ projects_data/
 <ProjectConfig>
   <Name>My Project</Name>
   <Levels>
-    <Level>User</Level>
-    <Level>System</Level>
-    <Level>Performance</Level>
+    <Level>
+      <Name>User</Name>
+      <Description>User-facing requirements describing system behavior from user perspective</Description>
+    </Level>
+    <Level>
+      <Name>System</Name>
+      <Description>System-level requirements defining technical implementation</Description>
+    </Level>
+    <Level>
+      <Name>Performance</Name>
+      <Description>Performance and quality requirements</Description>
+    </Level>
   </Levels>
+  <Settings>
+    <EnforceSingleParent>false</EnforceSingleParent>
+    <PreventOrphansAtLowerLevels>false</PreventOrphansAtLowerLevels>
+  </Settings>
 </ProjectConfig>
 ```
 
@@ -399,7 +493,11 @@ projects_data/
   <Title>System shall respond within 2 seconds</Title>
   <Description>Performance requirement</Description>
   <Level>Performance</Level>
-  <ParentID>parent-uuid</ParentID>
+  <ParentIDs>
+    <ParentID>parent-uuid-1</ParentID>
+    <ParentID>parent-uuid-2</ParentID>
+  </ParentIDs>
+  <Justification>Fast response time is critical for user experience and system usability</Justification>
 </Artifact>
 ```
 

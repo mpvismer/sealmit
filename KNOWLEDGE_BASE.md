@@ -129,7 +129,8 @@ classDiagram
     
     class Requirement {
         +String level
-        +String parent_id
+        +List~String~ parent_ids
+        +String justification
     }
     
     class RiskHazard {
@@ -160,10 +161,21 @@ classDiagram
         +List~Trace~ traces
     }
     
+    class RequirementLevel {
+        +String name
+        +String description
+    }
+    
+    class ProjectSettings {
+        +Boolean enforce_single_parent
+        +Boolean prevent_orphans_at_lower_levels
+    }
+    
     class ProjectConfig {
         +String name
-        +List~String~ levels
+        +List~RequirementLevel~ levels
         +Dict risk_matrix
+        +ProjectSettings settings
     }
     
     BaseArtifact <|-- Requirement

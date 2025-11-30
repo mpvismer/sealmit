@@ -5,6 +5,7 @@ import './ProjectDashboard.css';
 import RequirementsView from './RequirementsView';
 import RiskView from './RiskView';
 import VerificationView from './VerificationView';
+import ProjectSettings from './ProjectSettings';
 
 function ProjectDashboard() {
     const { projectName } = useParams();
@@ -29,6 +30,7 @@ function ProjectDashboard() {
                     <Link to={`/project/${projectName}/requirements`} className={location.pathname.includes('requirements') ? 'active' : ''}>Requirements</Link>
                     <Link to={`/project/${projectName}/risks`} className={location.pathname.includes('risks') ? 'active' : ''}>Risk Management</Link>
                     <Link to={`/project/${projectName}/verification`} className={location.pathname.includes('verification') ? 'active' : ''}>Verification</Link>
+                    <Link to={`/project/${projectName}/settings`} className={location.pathname.includes('settings') ? 'active' : ''}>Settings</Link>
                 </nav>
             </aside>
             <main className="dashboard-content">
@@ -44,6 +46,7 @@ function ProjectDashboard() {
                     <Route path="requirements" element={<RequirementsView />} />
                     <Route path="risks" element={<RiskView />} />
                     <Route path="verification" element={<VerificationView />} />
+                    <Route path="settings" element={<ProjectSettings />} />
                 </Routes>
             </main>
         </div>

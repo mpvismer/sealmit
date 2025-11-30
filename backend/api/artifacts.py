@@ -27,7 +27,55 @@ def get_storage(project_name: str) -> GitStorage:
         logger.error(f"Error accessing project {project_name}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error accessing project")
 
-@router.post("/{project_name}/artifacts", response_model=BaseArtifact)
+def validate_requirement(requirement: Requirement, state: ProjectState) -> None:
+    """Validate requirement based on project settings.
+    
+    Raises HTTPException if validation fails.
+    """
+    settings = state.config.settings
+    
+    # Consolidate parent_id and parent_ids
+    parent_ids = requirement.parent_ids.copy() if requirement.parent_ids else []
+    if requirement.parent_id and requirement.parent_id not in parent_ids:
+        parent_ids.append(requirement.parent_id)
+    
+    # Validate single parent enforcement
+    if settings.enforce_single_parent and len(parent_ids) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Project settings enforce single parent per requirement. This requirement has multiple parents."
+        )
+    
+    # Validate orphan prevention
+    if settings.prevent_orphans_at_lower_levels:
+        # Check if this is a top-level requirement
+        level_names = state.config.get_level_names()
+        top_level_name = state.config.get_top_level_name()
+        
+        is_top_level = requirement.level == top_level_name
+        
+        # If not top-level and has no parents, it's an orphan
+        if not is_top_level and len(parent_ids) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Project settings prevent orphan requirements at lower levels. Requirements at level '{requirement.level}' must have at least one parent."
+            )
+    
+    # Validate parent IDs exist
+    for parent_id in parent_ids:
+        if parent_id not in state.artifacts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Parent requirement '{parent_id}' not found"
+            )
+        parent = state.artifacts[parent_id]
+        if not isinstance(parent, Requirement):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Parent '{parent_id}' is not a requirement"
+            )
+
+@router.post("/{project_name}/artifacts", response_model=Union[Requirement, RiskHazard, RiskCause, VerificationActivity, BaseArtifact])
 def create_artifact(project_name: str, artifact: Union[Requirement, RiskHazard, RiskCause, VerificationActivity] = Body(...)):
     """Create a new artifact in the project."""
     try:
@@ -40,6 +88,10 @@ def create_artifact(project_name: str, artifact: Union[Requirement, RiskHazard, 
             logger.warning(f"Artifact {artifact.id} already exists in project {project_name}")
             raise HTTPException(status_code=400, detail="Artifact with this ID already exists")
         
+        # Validate requirements based on project settings
+        if isinstance(artifact, Requirement):
+            validate_requirement(artifact, state)
+        
         state.artifacts[artifact.id] = artifact
         storage.save_draft(state)
         
@@ -51,7 +103,7 @@ def create_artifact(project_name: str, artifact: Union[Requirement, RiskHazard, 
         logger.error(f"Error creating artifact in project {project_name}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create artifact")
 
-@router.put("/{project_name}/artifacts/{artifact_id}", response_model=BaseArtifact)
+@router.put("/{project_name}/artifacts/{artifact_id}", response_model=Union[Requirement, RiskHazard, RiskCause, VerificationActivity, BaseArtifact])
 def update_artifact(project_name: str, artifact_id: str, artifact: Union[Requirement, RiskHazard, RiskCause, VerificationActivity] = Body(...)):
     """Update an existing artifact."""
     try:
@@ -67,6 +119,10 @@ def update_artifact(project_name: str, artifact_id: str, artifact: Union[Require
         if artifact.id != artifact_id:
             logger.warning(f"Artifact ID mismatch: URL={artifact_id}, Body={artifact.id}")
             raise HTTPException(status_code=400, detail="Artifact ID in URL must match ID in request body")
+        
+        # Validate requirements based on project settings
+        if isinstance(artifact, Requirement):
+            validate_requirement(artifact, state)
             
         state.artifacts[artifact_id] = artifact
         storage.save_draft(state)

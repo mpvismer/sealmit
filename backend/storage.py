@@ -3,7 +3,7 @@ import logging
 import git
 import xml.etree.ElementTree as ET
 from typing import Optional, Dict, List
-from models import ProjectState, ProjectConfig, BaseArtifact, Trace, ArtifactType, Requirement, RiskHazard, RiskCause, VerificationActivity, VerificationMethod
+from models import ProjectState, ProjectConfig, BaseArtifact, Trace, ArtifactType, Requirement, RiskHazard, RiskCause, VerificationActivity, VerificationMethod, RequirementLevel, ProjectSettings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -51,9 +51,22 @@ class GitStorage:
             # Save Project Config
             config_root = ET.Element("ProjectConfig")
             ET.SubElement(config_root, "Name").text = state.config.name
+            
+            # Save Levels (support both old str and new RequirementLevel format)
             levels_elem = ET.SubElement(config_root, "Levels")
             for level in state.config.levels:
-                ET.SubElement(levels_elem, "Level").text = level
+                if isinstance(level, RequirementLevel):
+                    level_elem = ET.SubElement(levels_elem, "Level")
+                    ET.SubElement(level_elem, "Name").text = level.name
+                    ET.SubElement(level_elem, "Description").text = level.description
+                else:
+                    # Backward compatibility: old string format
+                    ET.SubElement(levels_elem, "Level").text = level
+            
+            # Save Settings
+            settings_elem = ET.SubElement(config_root, "Settings")
+            ET.SubElement(settings_elem, "EnforceSingleParent").text = str(state.config.settings.enforce_single_parent)
+            ET.SubElement(settings_elem, "PreventOrphansAtLowerLevels").text = str(state.config.settings.prevent_orphans_at_lower_levels)
             
             tree = ET.ElementTree(config_root)
             ET.indent(tree, space="  ", level=0)
@@ -95,8 +108,19 @@ class GitStorage:
             # Type specific fields
             if isinstance(artifact, Requirement):
                 ET.SubElement(root, "Level").text = artifact.level
-                if artifact.parent_id:
+                
+                # Save parent IDs (support both old parent_id and new parent_ids)
+                if artifact.parent_ids:
+                    parent_ids_elem = ET.SubElement(root, "ParentIDs")
+                    for parent_id in artifact.parent_ids:
+                        ET.SubElement(parent_ids_elem, "ParentID").text = parent_id
+                elif artifact.parent_id:
+                    # Backward compatibility: save old parent_id format
                     ET.SubElement(root, "ParentID").text = artifact.parent_id
+                
+                # Save justification if present
+                if artifact.justification:
+                    ET.SubElement(root, "Justification").text = artifact.justification
             elif isinstance(artifact, RiskHazard):
                 if artifact.severity:
                     ET.SubElement(root, "Severity").text = artifact.severity
@@ -136,8 +160,40 @@ class GitStorage:
             tree = ET.parse(config_path)
             root = tree.getroot()
             name = root.find("Name").text
-            levels = [l.text for l in root.find("Levels").findall("Level")]
-            config = ProjectConfig(name=name, levels=levels)
+            
+            # Load levels (support both old str and new RequirementLevel format)
+            levels = []
+            levels_elem = root.find("Levels")
+            if levels_elem is not None:
+                for level_elem in levels_elem.findall("Level"):
+                    # Check if it's new format (with Name/Description) or old format (just text)
+                    name_elem = level_elem.find("Name")
+                    if name_elem is not None:
+                        # New format
+                        desc_elem = level_elem.find("Description")
+                        levels.append(RequirementLevel(
+                            name=name_elem.text,
+                            description=(desc_elem.text or "") if desc_elem is not None else ""
+                        ))
+                    else:
+                        # Old format - convert to RequirementLevel for consistency
+                        levels.append(RequirementLevel(
+                            name=level_elem.text,
+                            description=""
+                        ))
+            
+            # Load settings (with defaults if not present)
+            settings = ProjectSettings()
+            settings_elem = root.find("Settings")
+            if settings_elem is not None:
+                enforce_elem = settings_elem.find("EnforceSingleParent")
+                if enforce_elem is not None:
+                    settings.enforce_single_parent = enforce_elem.text == "True"
+                prevent_elem = settings_elem.find("PreventOrphansAtLowerLevels")
+                if prevent_elem is not None:
+                    settings.prevent_orphans_at_lower_levels = prevent_elem.text == "True"
+            
+            config = ProjectConfig(name=name, levels=levels, settings=settings)
 
             # Load Traces
             traces = []
@@ -166,10 +222,33 @@ class GitStorage:
                         desc = root.find("Description").text if root.find("Description") is not None else None
                         
                         if art_type == ArtifactType.REQUIREMENT:
+                            # Load parent IDs (support both old parent_id and new parent_ids)
+                            parent_ids = []
+                            parent_id = None
+                            
+                            # Check for new format (ParentIDs)
+                            parent_ids_elem = root.find("ParentIDs")
+                            if parent_ids_elem is not None:
+                                parent_ids = [p.text for p in parent_ids_elem.findall("ParentID")]
+                            else:
+                                # Check for old format (ParentID)
+                                parent_id_elem = root.find("ParentID")
+                                if parent_id_elem is not None:
+                                    parent_id = parent_id_elem.text
+                                    parent_ids = [parent_id] if parent_id else []
+                            
+                            # Load justification
+                            justification = None
+                            justification_elem = root.find("Justification")
+                            if justification_elem is not None:
+                                justification = justification_elem.text
+                            
                             artifacts[art_id] = Requirement(
                                 id=art_id, title=title, description=desc,
                                 level=root.find("Level").text,
-                                parent_id=root.find("ParentID").text if root.find("ParentID") is not None else None
+                                parent_id=parent_id,
+                                parent_ids=parent_ids,
+                                justification=justification
                             )
                         elif art_type == ArtifactType.RISK_HAZARD:
                             artifacts[art_id] = RiskHazard(

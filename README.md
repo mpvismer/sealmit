@@ -30,6 +30,7 @@ Comprehensive documentation is organized following software engineering best pra
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | High-level system architecture and design decisions |
 | **[DETAILED_DESIGN_BACKEND.md](DETAILED_DESIGN_BACKEND.md)** | Backend implementation details & status |
 | **[DETAILED_DESIGN_FRONTEND.md](DETAILED_DESIGN_FRONTEND.md)** | Frontend implementation details & status |
+| **[TESTING_STRATEGY.md](TESTING_STRATEGY.md)** | Testing architecture and approach |
 | **[KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)** | Comprehensive project knowledge base |
 
 ---
@@ -117,6 +118,9 @@ sealmit/
 │   │   ├── projects.py        # Project management
 │   │   ├── artifacts.py       # Artifact CRUD
 │   │   └── ai.py              # AI assistant
+│   ├── tests/                 # Integration tests
+│   │   ├── conftest.py        # Test fixtures
+│   │   └── integration/       # API integration tests
 │   ├── main.py                # FastAPI application
 │   ├── asig_server.py         # Web server
 │   ├── desktop_app.py         # Desktop launcher
@@ -127,6 +131,9 @@ sealmit/
 │   ├── src/
 │   │   ├── components/        # Reusable components
 │   │   ├── pages/             # Page components
+│   │   ├── tests/             # Integration tests
+│   │   │   ├── setup.js       # Test configuration
+│   │   │   └── integration/   # Component tests
 │   │   ├── App.jsx            # Root component
 │   │   └── main.jsx           # Entry point
 │   ├── package.json           # Dependencies
@@ -136,6 +143,7 @@ sealmit/
 ├── ARCHITECTURE.md            # System architecture
 ├── DETAILED_DESIGN_BACKEND.md # Backend design
 ├── DETAILED_DESIGN_FRONTEND.md # Frontend design
+├── TESTING_STRATEGY.md        # Testing architecture
 └── README.md                  # This file
 ```
 
@@ -201,10 +209,65 @@ cd frontend
 npm run lint        # ESLint
 ```
 
-### Verification Scripts
+### Testing
+
+SEALMit uses a multi-layered testing approach focused on integration testing to ensure reliability while minimizing maintenance overhead.
+
+#### Backend Integration Tests
+
+Tests verify API endpoints, data persistence, and business logic compliance with `DETAILED_DESIGN_BACKEND.md`.
 
 ```bash
-# Test backend API
+# Navigate to backend
+cd backend
+
+# Run all integration tests
+uv run pytest tests/integration/
+
+# Run with verbose output
+uv run pytest tests/integration/ -v
+
+# Run specific test file
+uv run pytest tests/integration/test_projects.py
+
+# Run specific test
+uv run pytest tests/integration/test_projects.py::test_create_project
+```
+
+**Coverage**: Project management, artifact CRUD, trace creation, Git commits
+
+#### Frontend Integration Tests
+
+Tests verify component structure, routing, and compliance with `DETAILED_DESIGN_FRONTEND.md`.
+
+```bash
+# Navigate to frontend
+cd frontend
+
+# Run all tests
+npm test
+
+# Run in watch mode (for development)
+npm test -- --watch
+
+# Run with UI
+npm test -- --ui
+```
+
+**Coverage**: ProjectDashboard structure, data fetching, route navigation
+
+#### E2E Testing (Manual/AI-Driven)
+
+End-to-end testing is performed **dynamically** without persistent test scripts:
+- Manual exploratory testing by users
+- AI agent-driven testing on-demand (future)
+
+See [TESTING_STRATEGY.md](TESTING_STRATEGY.md) for the complete testing architecture.
+
+### Legacy Verification Scripts
+
+```bash
+# Quick API smoke test
 python verify_backend.py
 
 # Test ASIG server
@@ -212,7 +275,11 @@ python verify_asig.py
 
 # Test AI integration
 python verify_ai.py
+
+# Comprehensive E2E test
+python verify_e2e.py
 ```
+
 
 ---
 
@@ -257,6 +324,7 @@ A native window will open with the application.
 - ✅ Traceability links
 - ✅ Git-based version control
 - ✅ Web and desktop deployment
+- ✅ Integration testing (backend & frontend)
 - ⚠️ AI assistant (placeholder implementation)
 
 ### Planned Features (Phases 2-5)
