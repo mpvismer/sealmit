@@ -1,0 +1,83 @@
+.verification-view {
+    padding: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 20px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.activities-list {
+    display: grid;
+    gap: 20px;
+}
+
+.activity-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-left: 5px solid #ccc;
+}
+
+.activity-card.passed {
+    border-left-color: #28a745;
+}
+
+.activity-card.failed {
+    border-left-color: #dc3545;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.method-badge {
+    background: #e9ecef;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #495057;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.status-badge.pass {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.fail {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.activity-details {
+    margin-top: 15px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.activity-details p {
+    margin: 5px 0;
+}
